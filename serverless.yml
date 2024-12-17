@@ -1,0 +1,151 @@
+# "org" ensures this Service is used with the correct Serverless Framework Access Key.
+org: rohx99
+service: user-auth  # Name of the service
+
+# Provider Configuration
+provider:
+  name: aws  # Cloud provider, in this case, AWS
+  runtime: nodejs18.x  # Runtime for Lambda functions (Node.js 18.x)
+  region: ap-south-1  # AWS region for deployment (Mumbai region)
+  
+  logs:
+      level: INFO
+      fullExecutionData: true
+
+  # Environment variables accessible in Lambda functions
+  environment:
+    USERS_TABLE: Users  # DynamoDB Users table name
+    TASKS_TABLE: Tasks  # DynamoDB Tasks table name
+
+  # IAM Role Statements to define permissions for Lambda functions
+  iamRoleStatements:
+    # Allow access to Users table
+    - Effect: Allow
+      Action:
+        - dynamodb:GetItem
+        - dynamodb:PutItem
+        - dynamodb:Query
+        - dynamodb:Scan
+        - dynamodb:UpdateItem
+      Resource: arn:aws:dynamodb:ap-south-1:${aws:accountId}:table/Users
+
+    # Allow access to Tasks table
+    - Effect: Allow
+      Action:
+        - dynamodb:GetItem
+        - dynamodb:PutItem
+        - dynamodb:UpdateItem
+        - dynamodb:DeleteItem
+      Resource: arn:aws:dynamodb:ap-south-1:${aws:accountId}:table/Tasks
+
+# Functions (Lambda handlers)
+functions:
+  # Register function to create a new user
+  register:
+    handler: handler.register  # Lambda function handler in 'handler.js'
+    events:
+      - http:
+          path: register  # API endpoint for registering users
+          method: post  # POST method
+          cors: true  # Enable CORS (Cross-Origin Resource Sharing)
+
+  # Login function to authenticate users
+  login:
+    handler: handler.login  # Lambda function handler in 'handler.js'
+    events:
+      - http:
+          path: login  # API endpoint for logging in
+          method: post  # POST method
+          cors: true  # Enable CORS
+
+  # Function to get all users
+  getAllUsers:
+    handler: handler.getAllUsers  # Lambda function handler in 'handler.js'
+    events:
+      - http:
+          path: users  # API endpoint to retrieve all users
+          method: get  # GET method
+          cors: true  # Enable CORS
+
+  # Function to create a task (for a logged-in user)
+  createTask:
+    handler: handler.createTask  # Lambda function handler in 'task.js'
+    events:
+      - http:
+          path: task  # API endpoint to create a task
+          method: post  # POST method
+          cors: true  # Enable CORS
+          authorizer:
+            arn: arn:aws:cognito-idp:ap-south-1:879381281356:userpool/ap-south-1_yYi1NEG9A  # Cognito User Pool Authorizer for authentication
+
+  # Function to get a specific task by taskId
+  getTask:
+    handler: handler.getTask  # Lambda function handler in 'task.js'
+    events:
+      - http:
+          path: task/{taskId}  # API endpoint to get a specific task by taskId
+          method: get  # GET method
+          cors: true  # Enable CORS
+          authorizer:
+            arn: arn:aws:cognito-idp:ap-south-1:879381281356:userpool/ap-south-1_yYi1NEG9A  # Cognito User Pool Authorizer
+
+  # Function to update a specific task by taskId
+  updateTask:
+    handler: handler.updateTask  # Lambda function handler in 'task.js'
+    events:
+      - http:
+          path: task/{taskId}  # API endpoint to update a task by taskId
+          method: put  # PUT method
+          cors: true  # Enable CORS
+          authorizer:
+            arn: arn:aws:cognito-idp:ap-south-1:879381281356:userpool/ap-south-1_yYi1NEG9A  # Cognito User Pool Authorizer
+
+  # Function to delete a specific task by taskId
+  deleteTask:
+    handler: handler.deleteTask  # Lambda function handler in 'task.js'
+    events:
+      - http:
+          path: task/{taskId}  # API endpoint to delete a task by taskId
+          method: delete  # DELETE method
+          cors: true  # Enable CORS
+          authorizer:
+            arn: arn:aws:cognito-idp:ap-south-1:879381281356:userpool/ap-south-1_yYi1NEG9A  # Cognito User Pool Authorizer
+
+# Resources (DynamoDB tables)
+resources:
+  Resources:
+    # Users Table Definition in DynamoDB
+    UsersTable:
+      Type: AWS::DynamoDB::Table  # Define DynamoDB Table resource
+      Properties:
+        TableName: Users  # Table name in DynamoDB
+        AttributeDefinitions:
+          - AttributeName: email  # Primary key attribute for Users table
+            AttributeType: S  # 'S' stands for String type
+        KeySchema:
+          - AttributeName: email  # HASH key (primary key)
+            KeyType: HASH  # The key type is HASH (single key)
+        ProvisionedThroughput:  # Provisioned throughput settings
+          ReadCapacityUnits: 5  # Number of read capacity units
+          WriteCapacityUnits: 5  # Number of write capacity units
+    
+    # Tasks Table Definition in DynamoDB
+    TasksTable:
+      Type: AWS::DynamoDB::Table  # Define DynamoDB Table resource
+      Properties:
+        TableName: Tasks  # Table name in DynamoDB
+        AttributeDefinitions:
+          - AttributeName: email  # Partition key (HASH) for the Tasks table
+            AttributeType: S  # 'S' stands for String type
+          - AttributeName: taskId  # Sort key (RANGE) for the Tasks table
+            AttributeType: S  # 'S' stands for String type
+        KeySchema:
+          - AttributeName: email  # Partition key (HASH)
+            KeyType: HASH  # The key type is HASH (single key)
+          - AttributeName: taskId  # Sort key (RANGE)
+            KeyType: RANGE  # The key type is RANGE (for sorting tasks)
+        BillingMode: PAY_PER_REQUEST  # On-demand scaling mode (no fixed throughput)
+
+# Plugins used by the Serverless Framework
+plugins:
+  - serverless-offline  # Plugin to run Serverless locally for testing and development
